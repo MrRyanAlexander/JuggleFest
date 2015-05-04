@@ -16,17 +16,13 @@ In any case, this is my final solution. After 3 trying days and many long hours 
 
 Clone this repo
 
-''' bash
-
+``` bash
 git clone https://github.com/MrRyanAlexander/JuggleFest.git
+```
 
-'''
+You will need to have [Python](https://www.python.org/downloads/) installed on your machine to run this. 
 
-You will need to have [Python]("https://www.python.org/downloads/") installed on your machine to run this. 
-
-''' bash
-
+``` bash
 python juggle.py
-
-'''
+```
 
