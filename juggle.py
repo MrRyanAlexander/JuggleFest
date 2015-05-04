@@ -71,7 +71,7 @@ class Circuit:										#Class Object for circuits
 		else:	
 			self.matches.insert(i, j)				#insert the higher match, bumping the rest down 1
 
-		if len(self.matches) > 4:					#send extra jugglers to their next preference
+		if len(self.matches) > 6:					#send extra jugglers to their next preference
 			tj = self.matches[-1]					#copy the juggler
 			self.matches.remove(self.matches[-1])	#remove the juggler for this circuit
 			self.passJuggler(tj)					#send the juggler to its next circuit
