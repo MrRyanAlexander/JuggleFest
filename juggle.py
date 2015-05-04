@@ -1,4 +1,7 @@
 '''
+Written by    : Ryan Alex
+Date Created  : 4/29/15
+
 This program illustrates one way to solve the
 JuggleFest problem for Yodle.
 
@@ -13,427 +16,191 @@ In jugglefest.txt each juggler has 10 preferences
 Given 12K jugglers and 2K cicuits, we know to assume
 there will be 6 jugglers accepted into each circuit. 
 
-1) read the jugglers.txt line by line and convert the data
-For the circuits we need to create a matrix to compute the dot
-products. Then once we are getting juggler data we can start
-computing the dot products right away. 
+'''
+import re 											#import the regex package
 
-@ def readFile(file)
+circuits 		= []								#list to hold all the circuits
+circuitCount 	= 0 								#track total circuits created
+jugglerCount 	= 0 								#track total jugglers created
+hazeCount    	= 0 								#track overal hazing total
 
+class Circuit:										#Class Object for circuits
+
+	def __init__(self, data):
+		global circuitCount
+
+		self.t = data[0]							#circuit name value
+		self.h = data[1]  							#hand eye
+		self.e = data[2]							#endurance
+		self.p = data[3]							#pizzaz
+		self.matches = []							#the 4-6 matches for this circuit
+		self.hasMatch = False						#track if circuit has match
+		circuitCount+=1 							#track total circuits created
+
+	def hazeInductee(self, j):						#haze an inductee; a juggler
+		global hazeCount
+
+		hazeCount +=1
+		#print "Juggler {0} entering circuit {1} with value {2}".format(j.t, self.t, j.dpsValForIndex(j.sp))
+		
+		if self.hasMatch:
+			
+			#Initially I thought that I should consider the preference
+			#that each juggler had, but that is wrong. Consider this question
+			#based on the example for this test. Circuit 0's highest record is
+			#J5:C0:161 and it is the highest match. The trick here is what happens
+			#at scale; which in this case is represented by 1997 additional circuits
+			#and 19,988 addition competitors. Suppose that there are 10 more added
+			#jugglers right now and a few of them first prefer C2 and are higher
+			#than J6:C2:128. What will happen if J6:C0:188 is forced to find it's
+			#second circuit? It will head over to C1, but let's say C1 is full and 
+			#31 is too high, it heads over to C0 and guess what? It beats J5. So now
+			#Circuit 0's highest juggler is J6:C0:188. 
+
+			self.isMatch(j)
+		else:
+			#print "Appending first juggler {0} to enter circuit {1}".format(j.t, self.t)
+			
+			self.matches.append(j)					#add the first juggler to this circuit
+			self.hasMatch = True					#flip the swith for has matches only run 
+												    #this once per circuit match
+
+	def insertMatch(self, j, i):
+		if i == None:
+			self.matches.append(j)					#append the new juggler to the list
+		else:	
+			self.matches.insert(i, j)				#insert the higher match, bumping the rest down 1
+
+		if len(self.matches) > 4:					#send extra jugglers to their next preference
+			tj = self.matches[-1]					#copy the juggler
+			self.matches.remove(self.matches[-1])	#remove the juggler for this circuit
+			self.passJuggler(tj)					#send the juggler to its next circuit
+
+	def passJuggler(self, j):						#pass juggler to its next preference
+		if not j.sp >= len(j.dps)-1:				#make sure not to pass jugglers out of bounds
+			j.sp +=1 								#increment the jugglers current preferred circuit
+													#for the next loop after it's passed
+
+													#pass the juggler to next circuit
+			circuits[j.dpsKeyForIndex(j.sp)].hazeInductee(j)
+
+	def isMatch(self, j):
+		notFound=True								#keep track if no match is found
+		for i in range(len(self.matches)):			#compare to all index
+			
+			#print "Val for J {0} compared to C {1}".format(j.dpsValForIndex(j.sp), self.matches[i].dpsValForCirKey(self.t))
+			
+			if j.dpsValForIndex(j.sp) > self.matches[i].dpsValForCirKey(self.t):# or j.dpsValForIndex(j.sp) < self.matches[-1].dpsValForCirKey(self.t):
+				
+				#print "Picked Juggler {0} with value {1} compared to {2}".format(j.t, j.dpsValForIndex(j.sp), self.matches[i].dpsValForCirKey(self.t))
+			
+				notFound=False						#flip the switch if found
+				self.insertMatch(j, i)				#start inserting the match at index
+				break
+
+		if notFound:								#if no match was found looping
+			self.insertMatch(j, None)				#the match will just be appended
+
+	def cmnt(self):									#add up the matched juggler names
+		t = 0 										#this is just used at the end to 
+		for j in self.matches:						#print out something pretty
+			t += j.t 								#adds to the total name count
+		return t 									#return the total
+
+class Juggler:										#Class Object for jugglers
+	def __init__(self, data):
+		global jugglerCount
+
+		self.t   = data[0]							#juggler name value
+		self.dps = self.dotProducts(data)			#list of dot products
+		self.sp  = 0 								#track the preference order
+		jugglerCount+=1 							#track total jugglers created
+		self.joinCircuit() 							#init join circuit
+	
+	def dotProducts(self, cs):						#return the computed dot product for this juggler
+		return [ (c,( cs[1]*circuits[c].h)+(cs[2]*circuits[c].e)+(cs[3]*circuits[c].p) ) for c in cs[4:] ]
+
+	def dpsValForCirKey(self, i):					#return the value for a circuit given a key
+		for c in self.dps:							#loop jugglers preferences
+			if i == c[0]:							#if passed in circuit number equals preferred circuit in list
+				return c[1]							#return the circuit value for this preference
+
+	def dpsValForIndex(self, i):					#return the preference value at index
+		return self.dps[i][1]		
+
+	def dpsKeyForIndex(self, i):					#return the preference key at index
+		return self.dps[i][0]
+
+	def joinCircuit(self):							#enter juggler into its first preferred cicuit.
+		circuits[self.dpsKeyForIndex(self.sp)].hazeInductee(self)
+
+	def prettyPrint(self):							#print out self data for humans to understand
+		return "J"+str(self.t)+" C"+str(self.dps[0][0])+":"+str(self.dps[0][1])+" C"+str(self.dps[1][0])+":"+str(self.dps[1][1])+" C"+str(self.dps[1][0])+":"+str(self.dps[1][1])
+
+
+
+def readFile():										#read an input file
+	return open("data.txt")							#open input file
+
+def writeFile():
+	f = open('output.txt', 'w')						#write the output file
+	for c in circuits:								#print out the circuits in a pretty fashin
+		f.write("C"+str(c.t)+" ")					#write the circuit name once before the matches
+		for i in range(len(c.matches)):				#loop the circuits matches
+			f.write(c.matches[i].prettyPrint())		#conjoin our useable data back to pretty human bs
+			if i < len(c.matches)-1:				#add ,'s to the end of each line, except the last
+				f.write(", ")						#write , to end of jugglers dps
+		f.write('\n')								#write newline
+	f.close()										#close the file
  
-       CIRCUITS       JUGGLERS  
-    ------------------------------
-      H  E  P    H  E  P    PREFS
-    __|__|__|____|__|__|______|____
-1) | [2, 1, 1]  [3, 9 ,2, [2, 1, 0]]
-2) | [2, 1, 1]  [3, 9, 2, [2, 0, 1]]
-3) | [2, 1, 1]  [3, 9, 2, [1, 2, 0]]
-4) | [2, 1, 1]  [3, 9, 2, [2, 0, 1]]
-5) | [2, 1, 1]  [3, 9, 2, [0, 1, 2]]
-'''
-import sys
-import re
-from itertools import izip
+def escapedChars(l):
+ 	l = re.findall(r'\d+', l)  						#replace all but number chars
+ 	l = [int(i) for i in l] 						#convert all chars to ints
+ 	return l 										#return the [int]
 
-cs = [] #circuits
-cm = [] #circuits with jugglers
-dp = [] # juggler dot products
+def openCircuit():
+	f = readFile()
+	t = True	   									#track the top of file
+	for l in f: 									#read line in file
+		if t:										#check is this the top?
+			if l == '\n': 							#check for top/bottom seperator
+				t = False							#flip flag for top to False
+				continue							#skip the spac
 
-def readFile(f):
-
- 	global cs, cm, dp
-
-	top = True
-
-	for l in f: 
-
-		if l == '\n':
-			top = False
-			continue			 
-
-		l = re.findall(r'\d+', l) #only use the int chars
-		l = [int(i) for i in l]   #convert the chars to ints
-
-		if top:
-			cs.append(l)  #puts the circuit in the list of circuits
-			cm.append([]) #adds an empty array for the circuit matches
+			l = escapedChars(l)						#escape the bs
+			circuit = Circuit(l)					#create a circuit
+			circuits.append(circuit)				#add the circuit to a list
 		else:
+			l = escapedChars(l)						#escape the bs
+			juggler = Juggler(l)					#create a juggler that starts joining circuits
 
-			
-			#l[0] = juggler name
-			#l[1] = juggler H
-			#l[2] = juggler H
-			#l[3] = juggler H
-			#l[4:] = juggler circuit preferences
-			
-			#store the dot products for this juggler
-			#in a list that will be passed to cm
-			jglr = []
-			jglr.append(l[0])   
-			for c in l[4:]:
+def main(): 	
+	global jugglerCount, circuitCount, hazeCount
 
-				#compute the dot product
-				d = (l[1] * cs[c][1]) + (l[2] * cs[c][2]) + (l[3] * cs[c][3])
-				
-				#add a (circuit, product) tuple for this juggler
-				jglr.append( (c, d) )
+	print "Welcome to the JuggleFest..."
 
-			#insert the juggler into its first preference
-			#cm[l[4]].append(jglr)
-			#print "inserting {0} into pref {1} ".format( jglr, l[4])
-			
+	openCircuit()									#open the main circuit - to begin the competition
+	writeFile()										#write the output file
 
-			dp.append(jglr)
+	for c in circuits:								#print out the circuits in a pretty fashin
+		print ""									#give the top a little breathing room from the results
+		for m in c.matches:
+													#conjoin our useable data back to pretty human bs
+			print "C"+str(c.t), m.prettyPrint()+",",
 
-	for d in dp:
-		print d
-	'''
-	Loop through the dot products, preference by preference
-	append the jugglers that prefer this circuit first. Before
-	looping the next preference, count the current jugglers
-	if we have too many, sort them and remove the ones we want
-	if we have just enough, sort them and remove the all
-	if we dont have enough, skip to the next preference, but 
-	check that the product is not higher than the lowest one 
-	we found in the first preference. Keep skipping to the
-	next preference untill we have enough. Remove an selected
-	jugglers
+	print '\n'										#THE END
+	print "Thanks for playing Juggle Fest!\n{0}: Jugglers Attended {1} circuits.\nCombined they got their asses hazed {2} times".format(jugglerCount, circuitCount, hazeCount)
+	print '\n'
 
-	'''
-	temp = []
-	dp = sorted(dp, key=circ)
-	ii = 1
-	attempts = 0
-	expected = 4
+	value = circuits[1970].cmnt()
 
-	#we start searching for jugglers who prefer circuit 0
-	#if we find 
-	#while len(dp) > 0:
-	for do in range(expected):
-		#temp = [ temp.append(d) for d in dp if d[ii][0] == ii-1 ]
-
-		#loop through all of the dot products
-		#find jugglers who prefer this circuit 
-		#the most first. then swtich to jugglers
-		#who prefer this circuit second most and
-		#if we still have not found enough, find
-		#the jugglers who prefer this circuit third
-		#most. We do this for however many circuits
-		#may by allowed to prefer
-
-		for d in dp:
-			#
-			if d[ii][0] == do:
-
-				temp.append(d)
-				print "Found, {0} for circuit {1}".format(d, d[ii][0]) 
-
-
-		temp = sorted(temp, key=prod, reverse=True)
-
-		#dp = [ dp.remove(e) for e in temp[:4]]
-
-		for e in temp[:4]:
-
-			print "Removing {0} from dp".format(e)
-			dp.remove(e)
-			cm[do].append(e)
-
-		temp = []
-
-	for d in dp:
-		print d
-
-	for z in cm:
-		print z
-		#[ ii+=1 else sys.exit("Fuck Off") if attempts >= 5 ii = 1 if ii >= 3 ]
-		'''
-		if ii >= 3:
-			ii = 1
-			attempts +=1
-			if attempts >= 10:
-				for d in dp:
-					print d
-				
-				sys.exit("Failed to do the job mother fucker")
-		else:
-			ii+=1
-		'''
-
-		#print "Finished looping by circuits"
-	'''
-	for t in cm: 
-		expected = 4
-
-		if len(t) > expected:
-			print "To many jugglers"
-
-			# sort the list of jugglers to keep highest
-			t = sorted(t, key=prod, reverse=True)
-
-			# loop the remaining jugglers
-			for u in t[expected:]:
-
-				#move the juggler to its seecond preference
-
-				print u
-
-		if len(t) == expected:
-			print "Need to sort jugglers"
-		
-		if len(t) < expected:
-			print "Not enough jugglers"
-
-		print t
-	#print cm
-	'''
-
-def circ(i):
-	return i[1][0] # accessing the (c, value)
-
-def prod(i):
-	return i[1][1]
-'''
-2) compute the dot products for each juggler
-
-        	1st       2st       3st       
-
-	1	[ (2, 230), (1, 123), (3, 12) ]
-
-This result needs to be used somehow? Since the first preference is 2
-we will add J1 to circuit 2, but this might change later
-
-We continue repeating these steps until all jugglers have been put into 
-the circuit they prefer first
-
-This new matrix is only cares about the value for each juggler that matches itself. 
-So for the above example, Circuit 2 has all of J1's info, but only cares
-about the value 230. 
-
-First we count how many jugglers we have in this circuit. If we have too many or just enough,
-we sort the jugglers by the value we care about. For the remaining jugglers we look at their 
-next preference and we move them to that circuit, but this might change again too
-
-What if there are not enough jugglers in this circuit? 
-
-For example lets just say that after computing the dot products, the first circuit only has 
-1 juggler and we need to find the remaining jugglers that might prefer this as a second option. 
-It is too early for that because the jugglers need to be grouped by their first preferences
-from the start. 
-
-My answer to the above question is simple. If there are not enough jugglers already, we 
-can skip sorting and moving and just move on, but for the sake of it, we log this circuit
-so that we know we need to come back to it once we have reached the end. This works
-because by the time we reach the end, the circuit that was missing jugglers before, either
-has too many or still not enough. We go back to these known circuits and check how many
-jugglers there are. If there still aren't enough we skip it again; logging it again too. 
-If there are too many we do a sort and move the remaining jugglers to their next preference. 
-
-Finally, when we reach the end and the log is empty, we are done finding the circuits. 
-
-Now we just need to create a file line by line containing all the circuits and selected jugglers. 
-
-'''
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def readListToDict(l, k):
-
-	if k == 0:
-		#remove the C and newline chars that start each line
-		l = [ re.sub(r'(C |\n)', '', h) for h in l ]
-
-		#split each line where there is a space
-		l = [ re.split(" ", h) for h in l ] 
-
-		for i in l: 
-		# add a circuit with key:values
-			circuits[i[0]] = {
-						"H":int(i[1].split(":")[1]),
-						"E":int(i[2].split(":")[1]),
-						"P":int(i[3].split(":")[1])
-					}
-	else: 
-		#remove the J and newline chars that start each line
-		l = [ re.sub(r'(J |\n)', '', h) for h in l ]
-
-		#split each line where there is a space
-		l = [ re.split(" ", h) for h in l ] 
-
-		#print g[0] = ['C0', 'H:7', 'E:7', 'P:10']
-		for i in l:
-			# add a juggler with key:values
-			jugglers[i[0]] = {
-						"H":int(i[1].split(":")[1]),
-						"E":int(i[2].split(":")[1]),
-						"P":int(i[3].split(":")[1])
-						}
-			for j in i[4:]:
-				jugglers[i[0]]["C"] = j.split(",")
-
-def sepList(f):
-	global cList, jList
-
-	a = [ (l.replace(" ", ","),) for l in f ]
-	#print f
-	#top = True;
+	print "The value for circuit 1970s juggler names totalled is, {0}".format(value)
+	print "Suggest emailing {0}@yodle.com".format(value)
 	
-		#print l.split(" "),
-	#	if top:
-	#		if l != '\n':
-	#			cList.append(l.split())
-	#		else:
-	#			top = False
-	#	else:
-	#		jList.append(l.split())
-	
-	#remove the C and newline chars that start each line
-	#cList = [ re.sub(r'(C|H|E|P|:|\n|)', '', h) for h in cList ]
-	#jList = [ re.sub(r'(C|J|H|E|P|:|\n|)', '', h) for h in jList ]
+	print "Here are the jugglers for circuit 1970..."
+	for match in circuits[1970].matches:
 
-	#cList = [ re.sub(r'()', '', h) for h in cList ]
-	#jList = [ re.sub(r'()', '', h) for h in jList ]
-	#jList = [ re.sub(r'(J,|\n)', '', h) for h in jList ]
-	#split each line where there is a space
-	#jList = [ re.split(" ", h) for h in jList ]
-	#cList = [ i.pop() for i in cList ]
-	#jList = [ i.pop(0) for i in jList ]
+		print match.prettyPrint(),
 
-	#jList = [ y.pop(0) for x in jList for y in x]
-	
-	#print cList
-	print a[2]
-	#print jList[0][4].split(",")
-
-def highJug():
-
-	print dotProds
-
-	for j in dotProds:
-		if '1' in jug:
-			print jug
-
-def setDots():
-	# loop by circuit count for jugglers; their all the same, use the first one for reference
-	for i in range(len(jugglers['J0']['C'])):
-		#loop all jugglers
-		for ii in range(len(jugglers)):
-			j = "J"+str(ii)
-
-			jh = jugglers[j]['H']
-			je = jugglers[j]['E']
-			jp = jugglers[j]['P']
-			jc = jugglers[j]['C']
-
-			ch = circuits[jc[i]]['H']
-			ce = circuits[jc[i]]['E']
-			cp = circuits[jc[i]]['P']
-
-			dot = (jh*ch)+(je*ce)+(jp*cp)
-
-			t = i in dotProds
-
-			if i:
-				dotProds[j][i] = { jc[i] : dot }
-			else:
-				dotProds[j] = { i : { jc[i] : dot }}
-
-#iterate the dot products by juggler
-#keep track of how many matches have been found for this circuit
-#if the first key is lacking dots, move to the next key
-def matchLookup(currentCircuit, expectedMatchCount):
-
-	global high, matchCount, currentColumn, lastMatch, match, trash
-	#12,000 jugglers
-	#2000 circuits 
-
-	#each circuit takes in 4-6 matches
-	#each juggler has 4-10 preferences
-
-
-	#repeat 4-6 times; limits the Jugglers allowed in the Circuits
-	for k in range(expectedMatchCount):
-
-		#for each juggler; referenced by the dot product dict count
-		#testing ranged from 1-10, finale goes 1-12000
-		for i in range(len(dotProds)):
-			j = "J"+str(i)
-			c = "C"+str(currentCircuit)
-
-			if len(trash) > 0 and c in trash: 
-
-				last =  dotProds[trash[len(trash)-1]][currentColumn][c]
-
-				print "Last :",last
-			
-			#run through all of the values for key,key,C overwriting the high score if higher
-			if c in dotProds[j][currentColumn] and dotProds[j][currentColumn][c] > high and j not in trash :
-				#keep overwriting the high score value
-				#but wait to use it after iterating all 
-				#of the dots and if colums for matches
-				high = dotProds[j][currentColumn][c]
-				match = j
-
-		#This ends one of 4-10 iterations to find the best Jugglers for Circuits
-		#Use the match, high that was created above. This is the first circuits, first Juggler
-		print "Picked Juggler : {0}, with High Scrore of : {1} ".format(match, high)
-		
-		print "Match count : ", matchCount
-		#do some cleanup; increment match count, reset the high score and add match to trash
-		matchCount += 1
-		high = 0 
-		trash.append(match)
-	
-	#make sure a match was found
-	#if we're missing a match call this function again 
-	if matchCount != expectedMatchCount and matchCount != 0:
-		currentColumn += 1
-
-		print "No match found, jumping to next column"
-		matchLookup(currentCircuit, expectedMatchCount)
-
-	else:
-		print "Done"
-
-
-def findMatches(circuitCount, expectedMatchCount):
-
-	for currentCircuit in range(circuitCount):
-		
-		matchLookup(expectedMatchCount, currentCircuit)
-
-	cleanup(trash)
-
-def cleanup(junk):
-	# all the trash junks 
-	for thing in junk:
-		print "Deleting : ", thing
-		del dotProds[thing]
-
-def main(): 
-
-	#seperate the circuits, jugglers and remove the space
-	readFile(open("data.txt"))		
-	#create the circuits dictionary
-	#readListToDict(cList, 0)
-	#create the jugglers dictionary
-	#readListToDict(jList, 1)
-
-	#setDots()
-
-	#findMatches(3, 4)
-	
 if __name__ == "__main__":
     main()
-
